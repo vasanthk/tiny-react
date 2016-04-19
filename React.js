@@ -5,6 +5,7 @@ class ReactElement {
     this.type = type
     this.key = key
     this.props = props
+    this.typeName = type.displayName || type
   }
 }
 
@@ -64,7 +65,7 @@ class ReactDOMComponent {
     this._rootNodeID = rootID
     let props = this._currentElement.props
     let type = this._currentElement.type
-    let tagOpen = `<${type} data-reactid=${this._rootNodeID}`
+    let tagOpen = `<${type} data-reactid="${this._rootNodeID}"`
     let tagClose = `</${type}>`
 
     for (let propKey in props) {
@@ -176,7 +177,7 @@ class ReactDOMComponent {
     updateDepth++
     //_diff 用来递归找出差别, 组装差异对象, 添加到更新队列diffQueue
     this._diff(diffQueue, nextChildrenElements)
-    console.log(diffQueue)
+    // console.log(diffQueue)
     updateDepth--
     if (updateDepth == 0) {
       // 在需要的时候调用patch, 执行具体的dom操作
@@ -200,6 +201,7 @@ class ReactDOMComponent {
     })
 
 
+    let lastIndex = 0 // 代表访问的最后一次的老的集合的位置
     let nextIndex = 0 // 代表到达的新的节点的index
     for (let name in nextChildren) {
       if (!nextChildren.hasOwnProperty(name)) {
@@ -211,40 +213,46 @@ class ReactDOMComponent {
       // 相同的话, 说明是使用的同一个component, 所以我们需要做移动的操作
       if (prevChild === nextChild) {
         // 添加差异对象, 类型: MOVE_EXISTING
-        diffQueue.push({
-          parentId: this._rootNodeID,
-          parentNode: $(`[data-reactid="${this._rootNodeID}"]`),
-          type: UPDATE_TYPES.MOVE_EXISTING,
-          fromIndex: prevChild._mountIndex,
-          toIndex: nextIndex,
-        })
+        if (prevChild._mountIndex < lastIndex) {
+          diffQueue.push({
+            parentID: this._rootNodeID,
+            parentNode: $(`[data-reactid="${this._rootNodeID}"]`),
+            type: UPDATE_TYPES.MOVE_EXISTING,
+            fromIndex: prevChild._mountIndex,
+            toIndex: nextIndex,
+          })
+        }
+        lastIndex = Math.max(prevChild._mountIndex, lastIndex)
       } else { // 如果不相同, 说明是新增加的节点
         // 但是如果老的还存在, 就是element不同, 但是component一样
         // 我们需要把它对应的老的element删除
+        // todo 我自己的理解: 这里的情况应该是前后element的key是相同的, 但是type不一样
         if (prevChild) {
           // 添加差异对象, 类型: REMOVE_NODE
           diffQueue.push({
-            parentId: this._rootNodeID,
+            parentID: this._rootNodeID,
             parentNode: $(`[data-reactid="${this._rootNodeID}"]`),
             type: UPDATE_TYPES.REMOVE_NODE,
             fromIndex: prevChild._mountIndex,
           })
-        }
 
-        // 如果以前已经渲染过了, 记得先去掉以前所有的事件监听, 通过命名空间全部清空
-        if (prevChild._rootNodeID) {
-          $(document).undelegate('.' + prevChild._rootNodeID)
+          // 如果以前已经渲染过了, 记得先去掉以前所有的事件监听, 通过命名空间全部清空
+          if (prevChild._rootNodeID) {
+            $(document).undelegate('.' + prevChild._rootNodeID)
+          }
+
+          lastIndex = Math.max(prevChild._mountIndex, lastIndex)
         }
 
         // 新增加的节点, 也组装差异对象放到队列里
         diffQueue.push({
-          parentId: this._rootNodeID,
+          parentID: this._rootNodeID,
           parentNode: $(`[data-reactid="${this._rootNodeID}"]`),
           type: UPDATE_TYPES.INSERT_MARKUP,
           fromIndex: null,
           toIndex: nextIndex,
           // 新增的节点, 多一个此属性, 表示新建节点DOM内容
-          markup: nextChild.mountComponent(),
+          markup: nextChild.mountComponent(`${this._rootNodeID}.${nextIndex}`),
         })
       }
       // 更新mount的index
@@ -257,7 +265,7 @@ class ReactDOMComponent {
       if (prevChildren.hasOwnProperty(name) && !(nextChildren && nextChildren.hasOwnProperty(name))) {
         // 添加差异对象, 类型: REMOVE_NODE
         diffQueue.push({
-          parentId: this._rootNodeID,
+          parentID: this._rootNodeID,
           parentNode: $(`[data-reactid="${this._rootNodeID}"]`),
           type: UPDATE_TYPES.REMOVE_NODE,
           fromIndex: prevChildren._mountIndex,
@@ -271,8 +279,47 @@ class ReactDOMComponent {
     }
   }
 
-  _patch() {
-  } // todo
+  _patch(updates) {
+    let initialChildren = []
+    let deleteChildren = []
+    for (let i = 0; i < updates.length; i++) {
+      let update = updates[i]
+      if (update.type === UPDATE_TYPES.MOVE_EXISTING || update.type === UPDATE_TYPES.REMOVE_NODE) {
+        let updatedIndex = update.fromIndex
+        let updatedChild = $(update.parentNode.children().get(updatedIndex))
+        let parentID = update.parentID
+
+        // 所有需要更新的节点都保存下来，方便后面使用
+        initialChildren[parentID] = initialChildren[parentID] || []
+        // 使用parentID作为简易命名空间
+        initialChildren[parentID][updatedIndex] = updatedChild
+
+        // 所有需要修改的节点先删除,对于move的，后面再重新插入到正确的位置即可
+        deleteChildren.push(updatedChild)
+      }
+    }
+
+    // 删除所有需要先删除的
+    $.each(deleteChildren, (index, child)=> {
+      $(child).remove()
+    })
+
+    // 再遍历一次, 这次处理新增的节点, 还有还有修改的节点这里也要重新插入
+    for (let i = 0; i < updates.length; i++) {
+      let update = updates[i]
+      switch (update.type) {
+        case UPDATE_TYPES.INSERT_MARKUP:
+          insertChildAt(update.parentNode, $(update.markup), update.toIndex)
+          break
+        case UPDATE_TYPES.MOVE_EXISTING:
+          insertChildAt(update.parentNode, initialChildren[update.parentID][update.fromIndex], update.toIndex)
+          break
+        case UPDATE_TYPES.REMOVE_NODE:
+          // 什么都不需要做，因为上面已经帮忙删除掉了
+          break;
+      }
+    }
+  }
 }
 
 class ReactCompositeComponent {
@@ -407,7 +454,8 @@ window.React = {
     document.dispatchEvent(new Event('mountReady'))
   },
 
-  createElement(type, config = {}, ...children) {
+  createElement(type, config, ...children) {
+    config = config || {}
     let props = {}
     let key = config.key || null
 
@@ -423,11 +471,13 @@ window.React = {
   },
 
   createClass(spec){
+    let displayName = spec.displayName || 'Unknown'
     //生成一个子类
     let Constructor = function (props) {
       this.props = props
       this.state = this.getInitialState ? this.getInitialState() : null
     }
+    Constructor.displayName = displayName
     //原型继承，继承超级父类
     Constructor.prototype = new ReactClass()
     Constructor.prototype.constructor = Constructor
