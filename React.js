@@ -43,9 +43,9 @@ class ReactDOMTextComponent {
 
 
 const UPDATE_TYPES = {
-  MOVE_EXISTING: 1,
-  REMOVE_NODE: 2,
-  INSERT_MARKUP: 3,
+  MOVE_EXISTING: 'MOVE_EXISTING',
+  REMOVE_NODE: 'REMOVE_NODE',
+  INSERT_MARKUP: 'INSERT_MARKUP',
 }
 
 // 全局的更新深度标志
@@ -176,6 +176,7 @@ class ReactDOMComponent {
     updateDepth++
     //_diff 用来递归找出差别, 组装差异对象, 添加到更新队列diffQueue
     this._diff(diffQueue, nextChildrenElements)
+    console.log(diffQueue)
     updateDepth--
     if (updateDepth == 0) {
       // 在需要的时候调用patch, 执行具体的dom操作
@@ -253,7 +254,7 @@ class ReactDOMComponent {
 
     // 对于老的节点里有, 新的节点里没有的那些, 也全都删除掉
     for (let name in prevChildren) {
-      if (prevChildren.hasOwnProperty(name) && !(nextChildren && nextChildre.hasOwnProperty(name))) {
+      if (prevChildren.hasOwnProperty(name) && !(nextChildren && nextChildren.hasOwnProperty(name))) {
         // 添加差异对象, 类型: REMOVE_NODE
         diffQueue.push({
           parentId: this._rootNodeID,
