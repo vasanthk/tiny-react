@@ -56,3 +56,13 @@ function _shouldUpdateReactComponent(prevElement, nextElement) {
       && prevElement.key === nextElement.key
   }
 }
+
+// 用于将childNode插入到指定位置
+function insertChildAt(parentNode, childNode, index) {
+  let beforeChild = parentNode.children().get(index)
+  if (beforeChild) {
+    childNode.insertBefore(beforeChild)
+  } else {
+    childNode.appendTo(parentNode)
+  }
+}

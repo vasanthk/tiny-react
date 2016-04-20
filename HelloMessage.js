@@ -1,6 +1,7 @@
 'use strict'
 
 window.HelloMessage = React.createClass({
+  displayName: 'HelloMessage',
   getInitialState(){
     return {type: 'say:'}
   },
@@ -22,5 +23,3 @@ window.HelloMessage = React.createClass({
     return React.createElement("div", props, this.state.type, "Hello ", this.props.name);
   }
 })
-
-const element = React.createElement(HelloMessage, {name: 'john'})
