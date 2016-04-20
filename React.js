@@ -78,7 +78,6 @@ class ReactDOMComponent {
           eventType + '.' + this._rootNodeID,
           props[propKey]
         )
-        // document.addEventListener(`${eventType}.${this._rootNodeID}`, props[propKey])
       }
       // 对于children属性以及事件监听的属性不需要进行字符串拼接
       // 事件会代理到全局 这边不能拼到dom上不然会产生原生的事件监听
@@ -176,7 +175,6 @@ class ReactDOMComponent {
     updateDepth++
     //_diff 用来递归找出差别, 组装差异对象, 添加到更新队列diffQueue
     this._diff(diffQueue, nextChildrenElements)
-    console.log(diffQueue)
     updateDepth--
     if (updateDepth == 0) {
       // 在需要的时候调用patch, 执行具体的dom操作
@@ -190,14 +188,15 @@ class ReactDOMComponent {
     // 这个是在刚开始渲染时赋值的，记不得的可以翻上面
     // _renderedChildren 本来是数组，我们搞成map
     let prevChildren = flattenChildren(this._renderedChildren)
-    // 生成新的子节点的component对象集合, 这里注意, 会服用老的component对象
+    // 生成新的子节点的component对象集合, 这里注意, 会复用老的component对象
     let nextChildren = generateComponentChildren(prevChildren, nextChildrenElements)
 
     // 重新赋值_renderedChildren, 使用最新的
-    this._renderedChildren = []
+    this._renderedChildren = [] // todo ?? 这里直接迭代对象不会使得children的顺序改变么?
     $.each(nextChildren, (key, instance)=> {
       this._renderedChildren.push(instance)
     })
+    // 虚拟DOM到此更新完毕, 接下来要根据虚拟DOM的diff来计算如果去操作真实DOM
 
 
     let nextIndex = 0 // 代表到达的新的节点的index
@@ -229,11 +228,11 @@ class ReactDOMComponent {
             type: UPDATE_TYPES.REMOVE_NODE,
             fromIndex: prevChild._mountIndex,
           })
-        }
 
-        // 如果以前已经渲染过了, 记得先去掉以前所有的事件监听, 通过命名空间全部清空
-        if (prevChild._rootNodeID) {
-          $(document).undelegate('.' + prevChild._rootNodeID)
+          // 如果以前已经渲染过了, 记得先去掉以前所有的事件监听, 通过命名空间全部清空
+          if (prevChild._rootNodeID) {
+            $(document).undelegate('.' + prevChild._rootNodeID)
+          }
         }
 
         // 新增加的节点, 也组装差异对象放到队列里
@@ -290,9 +289,9 @@ class ReactCompositeComponent {
     // 拿到当前元素对应的属性值
     let publicProps = this._currentElement.props
     // 拿到对应的ReactClass
-    let ReactClass = this._currentElement.type
+    let CustomeReactClass = this._currentElement.type
     // Initialize the public class
-    var inst = new ReactClass(publicProps)
+    var inst = new CustomeReactClass(publicProps)
     this._instance = inst
     //保留对当前component的引用，下面更新会用到
     inst._reactInternalInstance = this
