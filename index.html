@@ -1,0 +1,13 @@
+<html>
+<div id="container"></div>
+<script src="http://cdn.bootcss.com/jquery/2.2.3/jquery.js"></script>
+<script src="React.js"></script>
+<script src="HelloMessage.js"></script>
+<script>
+    function hello() {
+        window.alert('hello')
+    }
+    const element = React.createElement(HelloMessage, { name: 'shinima' })
+    React.render(element, document.getElementById('container'))
+</script>
+</html>
