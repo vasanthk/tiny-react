@@ -1,9 +1,16 @@
 'use strict'
 
 class HelloMessage extends React.Component {
-  constructor(props){
+  constructor(props) {
     super(props)
     this.state = { type: 'say' }
+    this.changeType = () => {
+      if (this.state.type === 'say') {
+        this.setState({ type: 'shout' })
+      } else {
+        this.setState({ type: 'say' })
+      }
+    }
   }
 
   componentWillMount() {
@@ -14,8 +21,15 @@ class HelloMessage extends React.Component {
     console.log('HelloMessage#didMount')
   }
 
+  componentDidUpdate() {
+    console.log('HelloMessage#didUpdate')
+  }
+
   render() {
     const children = [this.state.type, "Hello ", this.props.name]
-    return React.createElement('div', null, ...children)
+    const props = {
+      onclick: this.changeType,
+    }
+    return React.createElement('div', props, ...children)
   }
 }
