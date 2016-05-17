@@ -21,9 +21,17 @@ class TodoList extends React.Component {
     }
   }
 
+  // componentWillUpdate(nextProps, nextState) {
+  //   console.group('HelloMessage#willUpdate')
+  //   console.log('this.props:', this.props)
+  //   console.log('next.props:', nextProps)
+  //   console.log('this.state:', this.state)
+  //   console.log('next.state:', nextState)
+  //   console.groupEnd()
+  // }
+
   render() {
     const { items, text } = this.state
-    console.log(text)
     const count = items.length
     const lists = items.map(item => React.createElement('p', null, item))
     const input = React.createElement('input', { type: 'text', onkeyup: this.onChange })

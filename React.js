@@ -249,7 +249,7 @@ class ReactDOMComponent {
     // 拿到之前的子节点的component类型对象的集合, 这个是在刚开始渲染时赋值的
     // 并对其进行flatten, 结果为一个key到child的map
     const prevChildren = flattenChildren(this._renderedChildren)
-    // 生成新的子节点的component对象集合, 这里注意, 恢复用老的component对象
+    // 生成新的子节点的component对象集合, 这里注意, 可能会复用老的component对象
     const nextChildren = generateComponentChildren(prevChildren, nextChildrenElements)
     // 重新复制_renderedChildren, 使用最新的
     this._renderedChildren = []
@@ -257,6 +257,7 @@ class ReactDOMComponent {
       this._renderedChildren.push(child)
     })
 
+    let lastIndex = 0 // 代表访问的最后一次的老的集合的位置
     let nextIndex = 0 // 代表到达的新的节点的index
     // 通过比较两个集合的差异, 组装差异节点添加到队列中
     for (const key in nextChildren) {
@@ -266,15 +267,18 @@ class ReactDOMComponent {
       const prevChild = prevChildren && prevChildren[key]
       const nextChild = nextChildren[key]
       if (prevChild === nextChild) { // 相同的话, 说明是使用的同一个component, 所以我们需要做移动的操作
-        diffQueue.push({
-          type: UPDATE_TYPES.MOVE_EXISTING,
-          parentId: this._rootNodeId,
-          parentNode: parentNode,
-          fromIndex: prevChild._mountIndex,
-          toIndex: nextIndex,
-        })
+        if (prevChild._mountIndex < lastIndex) {
+          diffQueue.push({
+            type: UPDATE_TYPES.MOVE_EXISTING,
+            parentId: this._rootNodeId,
+            parentNode: parentNode,
+            fromIndex: prevChild._mountIndex,
+            toIndex: nextIndex,
+          })
+        }
+        lastIndex = Math.max(prevChild._mountIndex, lastIndex)
       } else { // 如果不相同, 说明是新增加的节点
-        // 但是如果老的还存在, 就是element不同, 但是component一样
+        // 但是如果老的还存在, 就是element的key相同, 但是element的type不同
         // 我们需要把它对应的老的element删除
         if (prevChild) {
           // 添加差异对象, 类型: REMOVE_NODE
@@ -290,6 +294,7 @@ class ReactDOMComponent {
           if (prevChild._rootNodeId) {
             $(document).undelegate('.' + prevChild._rootNodeId)
           }
+          lastIndex = Math.max(prevChild._mountIndex, lastIndex)
         }
 
         // 新增加的节点, 也组装差异对象放到队列里
@@ -328,7 +333,7 @@ class ReactDOMComponent {
     }
   }
 
-  _patch(updates) { // todo
+  _patch(updates) {
     const initialChildren = {}
     const deleteChildren = []
     updates.forEach(update => {
@@ -413,14 +418,10 @@ class ReactCompositeComponent {
     this._currentElement = nextElement || this._currentElement
 
     const inst = this._instance
+    const prevState = inst.state
+    const prevProps = inst.props
     const nextState = Object.assign({}, inst.state, newState)
     const nextProps = this._currentElement.props
-
-    // 如果有inst有shouldComponentUpdate并且返回false, 说明组件本身判断不需要更新, 就直接返回
-    if (inst.shouldComponentUpdate
-      && inst.shouldComponentUpdate(nextProps, nextState) === false) {
-      return
-    }
 
     /**
      * todo lifecycle - componentWillReceiveProps
@@ -432,13 +433,17 @@ class ReactCompositeComponent {
      * will not trigger an additional render.
      */
 
+    // 如果有inst有shouldComponentUpdate并且返回false, 说明组件本身判断不需要更新, 就直接返回
+    if (inst.shouldComponentUpdate
+      && inst.shouldComponentUpdate(nextProps, nextState) === false) {
+      return
+    }
+
     // 生命周期管理, 如果有componentWillUpdate, 就调用, 表示开始要更新了
     if (inst.componentWillUpdate) {
       inst.componentWillUpdate(nextProps, nextState)
     }
 
-    const prevState = inst.state
-    const prevProps = inst.props
     inst.props = nextProps // todo ??? 这一行语句在原来代码中没有, 不知道什么时候会更新inst.props
     inst.state = nextState // 改写state
 
