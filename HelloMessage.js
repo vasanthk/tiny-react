@@ -21,8 +21,27 @@ class HelloMessage extends React.Component {
     console.log('HelloMessage#didMount')
   }
 
-  componentDidUpdate() {
-    console.log('HelloMessage#didUpdate')
+  componentWillUpdate(nextProps, nextState) {
+    console.group('HelloMessage#willUpdate')
+    console.log('this.props:', this.props)
+    console.log('next.props:', nextProps)
+    console.log('this.state:', this.state)
+    console.log('next.state:', nextState)
+    console.groupEnd()
+  }
+
+  shouldComponentUpdate() {
+    console.log('HelloMessage#shouldComponentUpdate')
+    return true
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    console.group('HelloMessage#didUpdate')
+    console.log('prev.props:', prevProps)
+    console.log('this.props:', this.props)
+    console.log('prev.state:', prevState)
+    console.log('this.state:', this.state)
+    console.groupEnd()
   }
 
   render() {

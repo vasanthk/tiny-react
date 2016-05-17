@@ -114,9 +114,9 @@ class ReactDOMTextComponent {
 }
 
 const UPDATE_TYPES = {
-  MOVE_EXISTING: 1,
-  REMOVE_NODE: 2,
-  INSERT_MARKUP: 3,
+  MOVE_EXISTING: 'MOVE_EXISTING',
+  REMOVE_NODE: 'REMOVE_NODE',
+  INSERT_MARKUP: 'INSERT_MARKUP',
 }
 
 let updateDepth = 0 // 全局的更新深度标识
@@ -300,8 +300,8 @@ class ReactDOMComponent {
           parentNode: parentNode,
           fromIndex: null,
           toIndex: nextIndex,
-          // 新增的节点, 多一个属性, 表示新节点的dom内容
-          markup: nextChild.mountComponent(),
+          // 新增的节点, 多一个属性, 表示新节点的dom内容 // todo 这里原文的代码有bug
+          markup: nextChild.mountComponent(`${this._rootNodeId}.${nextIndex}`),
         })
       }
       // 更新mount的index
@@ -392,7 +392,7 @@ class ReactCompositeComponent {
       // 不会触发rerender而是自动提前合并, 这里为了保持简单, 就略去了
     }
     const renderedElement = this._instance.render()
-    // 得到renderedElement'对应的component实例
+    // 得到renderedElement对应的component实例
     const renderedComponentInstance = instantiateReactComponent(renderedElement)
     this._renderedComponent = renderedComponentInstance // 存起来留作后用
 
@@ -400,7 +400,9 @@ class ReactCompositeComponent {
     var renderedMarkup = renderedComponentInstance.mountComponent(this._rootNodeId);
     //之前我们在React.render方法最后触发了mountReady事件，所以这里可以监听，在渲染完成后会触发。
     $(document).on('mountReady', function () {
-      inst.componentDidMount && inst.componentDidMount()
+      if (inst.componentDidMount) {
+        inst.componentDidMount()
+      }
     })
 
     return renderedMarkup
@@ -411,23 +413,34 @@ class ReactCompositeComponent {
     this._currentElement = nextElement || this._currentElement
 
     const inst = this._instance
-    // 合并state
     const nextState = Object.assign({}, inst.state, newState)
     const nextProps = this._currentElement.props
 
-    // 改写state // todo ??? 在这里更新state对吗, 是不是要等某个生命周期函数调用完了再更新state??
-    inst.state = nextState
-
     // 如果有inst有shouldComponentUpdate并且返回false, 说明组件本身判断不需要更新, 就直接返回
     if (inst.shouldComponentUpdate
-      && inst.shouldComponentUpdate(nextProps, nextState === false)) {
+      && inst.shouldComponentUpdate(nextProps, nextState) === false) {
       return
     }
+
+    /**
+     * todo lifecycle - componentWillReceiveProps
+     * Invoked when a component is receiving new props. This method is not called
+     * for the initial render.
+     * Use this as an opportunity to react to a prop transition before render()
+     * is called by updating the state using this.setState(). The old props can
+     * be accessed via this.props. Calling this.setState() within this function
+     * will not trigger an additional render.
+     */
 
     // 生命周期管理, 如果有componentWillUpdate, 就调用, 表示开始要更新了
     if (inst.componentWillUpdate) {
       inst.componentWillUpdate(nextProps, nextState)
     }
+
+    const prevState = inst.state
+    const prevProps = inst.props
+    inst.props = nextProps // todo ??? 这一行语句在原来代码中没有, 不知道什么时候会更新inst.props
+    inst.state = nextState // 改写state
 
     const prevComponentInstance = this._renderedComponent
     const prevRenderedElement = prevComponentInstance._currentElement
@@ -435,17 +448,17 @@ class ReactCompositeComponent {
     const nextRenderedElement = this._instance.render()
 
     // 判断是需要更新还是直接就重新渲染
-    // 注意这里的_shouldUpdateReactComponent和上面的不同, 这个是全局的方法 // todo
+    // 注意这里的_shouldUpdateReactComponent和上面的不同, 这个是全局的方法
     if (_shouldUpdateReactComponent(prevRenderedElement, nextRenderedElement)) {
       // 如果需要更新, 就继续调用子节点的receiveComponent方法, 传入新的element更新子节点
       prevComponentInstance.receiveComponent(nextRenderedElement)
       // 调用componentDidUpdate表示更新完成了
       if (inst.componentDidUpdate) {
-        inst.componentDidUpdate()
+        inst.componentDidUpdate(prevProps, prevState)
       }
     } else { // 如果发现完全是不同的两种element, 那就干脆重新渲染了
       // 重新new一个对应的component
-      this._renderedComponent = instantiateReactComponent(nextRenderedElement) // ???
+      this._renderedComponent = instantiateReactComponent(nextRenderedElement)
       // 重新生成对应的元素内容
       const nextMarkup = this._renderedComponent.mountComponent(this._rootNodeId)
       // 替换整个节点
@@ -465,23 +478,25 @@ class Component {
   }
 }
 
-const React = {
-  nextReactRootIndex: 0,
+const React = (function () {
+  let nextReactRootIndex = -1
+  return {
+    render(element, container) {
+      const componentInstance = instantiateReactComponent(element)
+      nextReactRootIndex++
+      const markup = componentInstance.mountComponent(nextReactRootIndex)
+      $(container).html(markup)
+      $(document).trigger('mountReady')
+    },
 
-  render(element, container) {
-    const componentInstance = instantiateReactComponent(element)
-    const markup = componentInstance.mountComponent(React.nextReactRootIndex++)
-    $(container).html(markup)
-    $(document).trigger('mountReady')
-  },
+    createElement(type, config = {}, ...children) {
+      const key = (config && config.key) || null
+      // 复制config里的内容到props
+      const props = Object.assign({}, config, { children: children })
+      delete props['key']
+      return new ReactElement(type, key, props)
+    },
 
-  createElement(type, config = {}, ...children) {
-    const key = (config && config.key) || null
-    // 复制config里的内容到props
-    const props = Object.assign({}, config, { children: children })
-    delete props['key']
-    return new ReactElement(type, key, props)
-  },
-
-  Component: Component,
-}
+    Component: Component,
+  }
+}())
